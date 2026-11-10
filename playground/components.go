@@ -285,7 +285,7 @@ func (o *OpBatcher) Apply(ctx *ExContext) *Component {
 	}
 	component.NewService("op-batcher").
 		WithImage("us-docker.pkg.dev/oplabs-tools-artifacts/images/op-batcher").
-		WithTag("v1.16.3").
+		WithTag("v1.18.0").
 		WithEntrypoint("op-batcher").
 		WithArgs(
 			"--l1-eth-rpc", Connect(o.L1Node, "http"),
@@ -312,7 +312,7 @@ func (o *OpNode) Apply(ctx *ExContext) *Component {
 
 	component.NewService("op-node").
 		WithImage("us-docker.pkg.dev/oplabs-tools-artifacts/images/op-node").
-		WithTag("v1.16.3").
+		WithTag("v1.19.11").
 		WithEntrypoint("op-node").
 		WithEnv("A", "B"). // this is just a placeholder to make sure env works since we e2e test with the recipes
 		WithArgs(
