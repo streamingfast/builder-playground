@@ -120,6 +120,7 @@ type ArtifactsBuilder struct {
 	// Op-stack options
 	l2Enabled            bool
 	applyLatestL2Fork    *uint64
+	karstForkBlock       *uint64
 	opBlockTimeInSeconds uint64
 
 	// Extra files to copy to artifacts (artifactName -> sourcePath)
@@ -143,6 +144,12 @@ func (b *ArtifactsBuilder) ApplyLatestL1Fork(applyLatestL1Fork bool) *ArtifactsB
 
 func (b *ArtifactsBuilder) ApplyLatestL2Fork(applyLatestL2Fork *uint64) *ArtifactsBuilder {
 	b.applyLatestL2Fork = applyLatestL2Fork
+	return b
+}
+
+// ApplyKarstFork activates Karst at the given L2 block, nil leaves it disabled.
+func (b *ArtifactsBuilder) ApplyKarstFork(karstForkBlock *uint64) *ArtifactsBuilder {
+	b.karstForkBlock = karstForkBlock
 	return b
 }
 
@@ -370,10 +377,21 @@ func (b *ArtifactsBuilder) Build(out *output) error {
 			"timestamp": hexutil.Uint64(opTimestamp).String(),
 			"alloc":     allocs,
 		}
+		var karstTime *uint64
+		if b.karstForkBlock != nil {
+			karstTime = new(uint64)
+			*karstTime = opTimestamp + b.opBlockTimeInSeconds*(*b.karstForkBlock)
+		}
+
+		genesisConfig := map[string]interface{}{}
 		if forkTime != nil {
-			input["config"] = map[string]interface{}{
-				"jovianTime": *forkTime,
-			}
+			genesisConfig["jovianTime"] = *forkTime
+		}
+		if karstTime != nil {
+			genesisConfig["karstTime"] = *karstTime
+		}
+		if len(genesisConfig) > 0 {
+			input["config"] = genesisConfig
 		}
 
 		newOpGenesis, err := overrideJSON(l2Fork.genesis, input)
@@ -411,6 +429,9 @@ func (b *ArtifactsBuilder) Build(out *output) error {
 		}
 		if forkTime != nil {
 			rollupInput["jovian_time"] = *forkTime
+		}
+		if karstTime != nil {
+			rollupInput["karst_time"] = *karstTime
 		}
 
 		newOpRollup, err := overrideJSON(l2Fork.rollupConfig, rollupInput)

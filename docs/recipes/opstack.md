@@ -8,11 +8,13 @@ Deploy an OP stack.
 - `batcher-max-channel-duration` (uint64): Maximum channel duration to use for the batcher. Default to '2'.
 - `block-time` (uint64): Block time to use for the rollup. Default to '2'.
 - `chain-monitor` (bool): Whether to enable chain-monitor. Default to 'false'.
+- `enable-karst` (uint64): Enable Karst fork at block N > 0, after Jovian (default: disabled). Requires --sequencer-el op-reth. Default to 'nil'.
 - `enable-latest-fork` (uint64): Enable Jovian fork: 0 = at genesis, N > 0 = at block N (default: Isthmus only). Default to 'nil'.
 - `enable-websocket-proxy` (bool): Whether to enable websocket proxy. Default to 'false'.
 - `external-builder` (string): External builder URL. Default to ''.
 - `flashblocks` (bool): Whether to enable flashblocks. Default to 'false'.
 - `flashblocks-builder` (string): External URL of builder flashblocks stream. Default to ''.
+- `sequencer-el` (string): Execution client of the sequencer: op-geth or op-reth. Default to 'op-geth'.
 - `use-predeploys` (string): Path to JSON file with additional contracts to predeploy in L2 genesis. Default to ''.
 
 ## Architecture Diagram

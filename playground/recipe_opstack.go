@@ -1,6 +1,8 @@
 package playground
 
 import (
+	"fmt"
+
 	flag "github.com/spf13/pflag"
 )
 
@@ -16,6 +18,12 @@ type OpRecipe struct {
 
 	// whether to enable the latest fork jovian and when
 	enableLatestFork *uint64
+
+	// whether to enable the karst fork and at which block
+	enableKarst *uint64
+
+	// sequencerEL is the execution client behind the sequencer op-node: op-geth or op-reth
+	sequencerEL string
 
 	// blockTime is the block time to use for the rollup
 	// (default is 2 seconds)
@@ -59,6 +67,8 @@ func (o *OpRecipe) Flags() *flag.FlagSet {
 	flags := flag.NewFlagSet("opstack", flag.ContinueOnError)
 	flags.StringVar(&o.externalBuilder, "external-builder", "", "External builder URL")
 	flags.Var(&nullableUint64Value{&o.enableLatestFork}, "enable-latest-fork", "Enable Jovian fork: 0 = at genesis, N > 0 = at block N (default: Isthmus only)")
+	flags.Var(&nullableUint64Value{&o.enableKarst}, "enable-karst", "Enable Karst fork at block N > 0, after Jovian (default: disabled). Requires --sequencer-el op-reth")
+	flags.StringVar(&o.sequencerEL, "sequencer-el", "op-geth", "Execution client of the sequencer: op-geth or op-reth")
 	flags.Uint64Var(&o.blockTime, "block-time", defaultOpBlockTimeSeconds, "Block time to use for the rollup")
 	flags.Uint64Var(&o.batcherMaxChannelDuration, "batcher-max-channel-duration", 2, "Maximum channel duration to use for the batcher")
 	flags.BoolVar(&o.flashblocks, "flashblocks", false, "Whether to enable flashblocks")
@@ -70,10 +80,38 @@ func (o *OpRecipe) Flags() *flag.FlagSet {
 	return flags
 }
 
+// Validate checks the flag combinations that cannot produce a working chain.
+func (o *OpRecipe) Validate() error {
+	switch o.sequencerEL {
+	case "op-geth":
+		if o.enableKarst != nil {
+			return fmt.Errorf("--enable-karst requires --sequencer-el op-reth, op-geth does not support Karst")
+		}
+	case "op-reth":
+		if o.externalBuilder == "op-reth" {
+			return fmt.Errorf("--external-builder op-reth cannot be used with --sequencer-el op-reth")
+		}
+	default:
+		return fmt.Errorf("invalid --sequencer-el %q, must be op-geth or op-reth", o.sequencerEL)
+	}
+
+	if o.enableKarst != nil {
+		if *o.enableKarst == 0 {
+			return fmt.Errorf("--enable-karst must be a block after genesis, the recipe has no Karst genesis")
+		}
+		if o.enableLatestFork == nil || *o.enableLatestFork >= *o.enableKarst {
+			return fmt.Errorf("--enable-karst requires Jovian (--enable-latest-fork) to activate at an earlier block")
+		}
+	}
+
+	return nil
+}
+
 func (o *OpRecipe) Artifacts() *ArtifactsBuilder {
 	builder := NewArtifactsBuilder()
 	builder.WithL2()
 	builder.ApplyLatestL2Fork(o.enableLatestFork)
+	builder.ApplyKarstFork(o.enableKarst)
 	builder.OpBlockTime(o.blockTime)
 	builder.PredeployFile(o.predeploysFile)
 	return builder
@@ -133,7 +171,12 @@ func (o *OpRecipe) Apply(ctx *ExContext) *Component {
 		})
 	}
 
-	elNode := "op-geth"
+	sequencerEL := o.sequencerEL
+	if sequencerEL == "" {
+		sequencerEL = "op-geth"
+	}
+
+	elNode := sequencerEL
 	if o.externalBuilder != "" {
 		elNode = "rollup-boost"
 
@@ -146,7 +189,7 @@ func (o *OpRecipe) Apply(ctx *ExContext) *Component {
 		}
 
 		component.AddComponent(ctx, &RollupBoost{
-			ELNode:                "op-geth",
+			ELNode:                sequencerEL,
 			Builder:               builderRef,
 			Flashblocks:           o.flashblocks,
 			FlashblocksBuilderURL: flashblocksBuilderRef,
@@ -169,7 +212,11 @@ func (o *OpRecipe) Apply(ctx *ExContext) *Component {
 		})
 	}
 
-	component.AddService(ctx, &OpGeth{})
+	if sequencerEL == "op-reth" {
+		component.AddComponent(ctx, &OpReth{Sequencer: true})
+	} else {
+		component.AddService(ctx, &OpGeth{})
+	}
 	component.AddComponent(ctx, &OpNode{
 		L1Node:   "el",
 		L1Beacon: "beacon",
@@ -178,7 +225,7 @@ func (o *OpRecipe) Apply(ctx *ExContext) *Component {
 
 	component.AddComponent(ctx, &OpBatcher{
 		L1Node:             "el",
-		L2Node:             "op-geth",
+		L2Node:             sequencerEL,
 		RollupNode:         "op-node",
 		MaxChannelDuration: o.batcherMaxChannelDuration,
 	})
@@ -188,12 +235,12 @@ func (o *OpRecipe) Apply(ctx *ExContext) *Component {
 			L1RPC:            "el",
 			L2BlockTime:      o.blockTime,
 			L2BuilderAddress: defaultL2BuilderAddress,
-			L2RPC:            "op-geth",
+			L2RPC:            sequencerEL,
 		})
 	}
 
 	if ctx.Contender.TargetChain == "" {
-		ctx.Contender.TargetChain = "op-geth"
+		ctx.Contender.TargetChain = sequencerEL
 	}
 	component.RunContenderIfEnabled(ctx)
 

@@ -142,6 +142,8 @@ Flags:
 
 - `--external-builder`: URL of an external builder to use (enables rollup-boost)
 - `--enable-latest-fork` (int): Enables the latest fork (jovian) at startup (0) or n blocks after genesis.
+- `--sequencer-el` (string): Execution client of the sequencer, `op-geth` (default) or `op-reth`.
+- `--enable-karst` (int): Enables Karst n blocks after genesis. Needs `--sequencer-el op-reth` and Jovian active before it.
 
 ### Example Commands
 

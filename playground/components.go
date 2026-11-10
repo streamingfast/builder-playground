@@ -285,7 +285,7 @@ func (o *OpBatcher) Apply(ctx *ExContext) *Component {
 	}
 	component.NewService("op-batcher").
 		WithImage("us-docker.pkg.dev/oplabs-tools-artifacts/images/op-batcher").
-		WithTag("v1.16.3").
+		WithTag("v1.18.0").
 		WithEntrypoint("op-batcher").
 		WithArgs(
 			"--l1-eth-rpc", Connect(o.L1Node, "http"),
@@ -312,7 +312,7 @@ func (o *OpNode) Apply(ctx *ExContext) *Component {
 
 	component.NewService("op-node").
 		WithImage("us-docker.pkg.dev/oplabs-tools-artifacts/images/op-node").
-		WithTag("v1.16.3").
+		WithTag("v1.19.11").
 		WithEntrypoint("op-node").
 		WithEnv("A", "B"). // this is just a placeholder to make sure env works since we e2e test with the recipes
 		WithArgs(
@@ -658,7 +658,12 @@ func (m *MevBoostRelay) Apply(ctx *ExContext) *Component {
 	return component
 }
 
-type OpReth struct{}
+type OpReth struct {
+	// Sequencer runs op-reth as the sequencer's execution layer instead of an external builder.
+	// It uses the OP Labs image, which supports Karst, and serves the RPC namespaces op-batcher
+	// and transaction tooling use.
+	Sequencer bool
+}
 
 var opRethRelease = &release{
 	Name:    "op-reth",
@@ -681,8 +686,6 @@ func (o *OpReth) Apply(ctx *ExContext) *Component {
 	component := NewComponent("op-reth")
 
 	svc := component.NewService("op-reth").
-		WithImage("ghcr.io/paradigmxyz/op-reth").
-		WithTag("v1.9.3").
 		WithEntrypoint("op-reth").
 		WithArgs(
 			"node",
@@ -698,7 +701,6 @@ func (o *OpReth) Apply(ctx *ExContext) *Component {
 			"--metrics", `0.0.0.0:{{Port "metrics" 9090}}`,
 			"--addr", "0.0.0.0",
 			"--port", `{{Port "rpc" 30303}}`).
-		WithRelease(opRethRelease).
 		WithArtifact("/data/jwtsecret", "jwtsecret").
 		WithArtifact("/data/l2-genesis.json", "l2-genesis.json").
 		WithVolume("data", "/data_op_reth")
@@ -707,6 +709,22 @@ func (o *OpReth) Apply(ctx *ExContext) *Component {
 		svc.WithArgs("--bootnodes", ctx.Bootnode.Connect(), "--nat", "none", "--rollup.discovery.v4")
 	} else {
 		svc.WithArgs("--disable-discovery")
+	}
+
+	if o.Sequencer {
+		svc.WithImage("us-docker.pkg.dev/oplabs-tools-artifacts/images/op-reth").
+			WithTag("v2.8.1").
+			WithArgs(
+				"--http.api", "web3,debug,eth,txpool,net,miner",
+				"--ws",
+				"--ws.addr", "0.0.0.0",
+				"--ws.port", `{{Port "ws" 8546}}`,
+				"--ws.api", "web3,debug,eth,txpool,net",
+			)
+	} else {
+		svc.WithImage("ghcr.io/paradigmxyz/op-reth").
+			WithTag("v1.9.3").
+			WithRelease(opRethRelease)
 	}
 
 	UseHealthmon(component, svc, healthmonExecution)
