@@ -116,3 +116,57 @@ func newTestOutput(t *testing.T) *output {
 	}
 	return o
 }
+
+func TestKarstFork_AtBlock(t *testing.T) {
+	o := newTestOutput(t)
+
+	jovianBlock := uint64(0)
+	karstBlock := uint64(20)
+	b := NewArtifactsBuilder().WithL2().OpBlockTime(1).ApplyLatestL2Fork(&jovianBlock).ApplyKarstFork(&karstBlock)
+	require.NoError(t, b.Build(o))
+
+	l2GenesisRaw, err := o.Read("l2-genesis.json")
+	require.NoError(t, err)
+	var l2Genesis struct {
+		Timestamp string `json:"timestamp"`
+		Config    struct {
+			JovianTime *uint64 `json:"jovianTime"`
+			KarstTime  *uint64 `json:"karstTime"`
+		} `json:"config"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(l2GenesisRaw), &l2Genesis))
+
+	rollupRaw, err := o.Read("rollup.json")
+	require.NoError(t, err)
+	var rollup struct {
+		Genesis struct {
+			L2Time uint64 `json:"l2_time"`
+		} `json:"genesis"`
+		JovianTime *uint64 `json:"jovian_time"`
+		KarstTime  *uint64 `json:"karst_time"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(rollupRaw), &rollup))
+
+	expectedKarstTime := rollup.Genesis.L2Time + karstBlock
+	require.NotNil(t, rollup.KarstTime)
+	require.Equal(t, expectedKarstTime, *rollup.KarstTime)
+	require.NotNil(t, l2Genesis.Config.KarstTime)
+	require.Equal(t, expectedKarstTime, *l2Genesis.Config.KarstTime)
+	require.Equal(t, uint64(0), *rollup.JovianTime)
+	require.Equal(t, uint64(0), *l2Genesis.Config.JovianTime)
+}
+
+func TestKarstFork_DisabledByDefault(t *testing.T) {
+	o := newTestOutput(t)
+
+	b := NewArtifactsBuilder().WithL2()
+	require.NoError(t, b.Build(o))
+
+	l2GenesisRaw, err := o.Read("l2-genesis.json")
+	require.NoError(t, err)
+	require.NotContains(t, l2GenesisRaw, "karstTime")
+
+	rollupRaw, err := o.Read("rollup.json")
+	require.NoError(t, err)
+	require.NotContains(t, rollupRaw, "karst_time")
+}

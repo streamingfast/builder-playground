@@ -783,6 +783,12 @@ func runIt(recipe playground.Recipe) error {
 		overrides[parts[0]] = parts[1]
 	}
 
+	if validator, ok := recipe.(playground.RecipeValidator); ok {
+		if err := validator.Validate(); err != nil {
+			return err
+		}
+	}
+
 	slog.Debug("Building artifacts...")
 	builder := recipe.Artifacts()
 	builder.GenesisDelay(genesisDelayFlag)

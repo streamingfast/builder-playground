@@ -27,6 +27,12 @@ type Recipe interface {
 	Output(manifest *Manifest) map[string]interface{}
 }
 
+// RecipeValidator is implemented by recipes that reject invalid flag combinations before
+// anything is built.
+type RecipeValidator interface {
+	Validate() error
+}
+
 // GetBaseRecipes returns all available base recipes
 func GetBaseRecipes() []Recipe {
 	return []Recipe{

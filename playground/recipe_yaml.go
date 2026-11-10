@@ -256,6 +256,13 @@ func (y *YAMLRecipe) Flags() *flag.FlagSet {
 	return y.baseRecipe.Flags()
 }
 
+func (y *YAMLRecipe) Validate() error {
+	if validator, ok := y.baseRecipe.(RecipeValidator); ok {
+		return validator.Validate()
+	}
+	return nil
+}
+
 func (y *YAMLRecipe) Artifacts() *ArtifactsBuilder {
 	builder := y.baseRecipe.Artifacts()
 
